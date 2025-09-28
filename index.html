@@ -1,203 +1,173 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kode Pos Indonesia</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-        }
-        select {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:disabled {
-            background-color: #aaa;
-            cursor: not-allowed;
-        }
-        button:hover:enabled {
-            background-color: #45a049;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 4px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cari Kode Pos + Alamat Lengkap</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    select { margin: 8px 0; padding: 5px; width: 100%; max-width: 300px; }
+    .result { margin-top: 20px; }
+    .alamat { margin-top: 10px; font-style: italic; }
+  </style>
 </head>
 <body>
-    <h1>Cari Kode Pos</h1>
-    
-    <div class="form-group">
-        <label for="province">Provinsi:</label>
-        <select id="province">
-            <option value="">Pilih Provinsi</option>
-        </select>
-    </div>
+  <h2>Cari Kode Pos + Alamat</h2>
 
-    <div class="form-group">
-        <label for="district">Kabupaten/Kota:</label>
-        <select id="district" disabled>
-            <option value="">Pilih Kabupaten/Kota</option>
-        </select>
-    </div>
+  <label>Provinsi:</label><br>
+  <select id="provinsi">
+    <option value="">-- Pilih Provinsi --</option>
+  </select><br>
 
-    <div class="form-group">
-        <label for="subdistrict">Kecamatan:</label>
-        <select id="subdistrict" disabled>
-            <option value="">Pilih Kecamatan</option>
-        </select>
-    </div>
+  <label>Kabupaten / Kota:</label><br>
+  <select id="kabkota" disabled>
+    <option value="">-- Pilih Kab/Kota --</option>
+  </select><br>
 
-    <button id="searchBtn" disabled>Cari Kode Pos</button>
+  <label>Kecamatan:</label><br>
+  <select id="kecamatan" disabled>
+    <option value="">-- Pilih Kecamatan --</option>
+  </select><br>
 
-    <div id="result"></div>
+  <div class="result" id="hasilKodePos"></div>
+  <div class="alamat" id="alamatLengkap"></div>
 
-    <script>
-        let postalData = [];
+  <script>
+    const BASE = 'https://alamat.thecloudalert.com/api';
 
-        // Load data from local JSON file
-        async function loadData() {
-            try {
-                const response = await fetch('./kodepos.json');
-                postalData = await response.json();
-                console.log('Isi postalData:', postalData); // Tambahkan ini
-                populateProvinces();
-            } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('result').innerHTML = 'Gagal memuat data. Pastikan file kodepos.json ada di folder yang sama.';
-            }
+    const selProv = document.getElementById('provinsi');
+    const selKab = document.getElementById('kabkota');
+    const selKec = document.getElementById('kecamatan');
+    const divHasil = document.getElementById('hasilKodePos');
+    const divAlamat = document.getElementById('alamatLengkap');
+
+    async function fetchAPI(path, params = {}) {
+      const url = new URL(BASE + path);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== '') {
+          url.searchParams.append(k, v);
         }
+      });
+      const resp = await fetch(url.toString());
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url.toString()}`);
+      return resp.json();
+    }
 
-        function populateProvinces() {
-            const provinceSelect = document.getElementById('province');
-            const uniqueProvinces = [...new Set(postalData.map(item => item.provinsi))];
-            uniqueProvinces.forEach(province => {
-                const option = document.createElement('option');
-                option.value = province;
-                option.textContent = province;
-                provinceSelect.appendChild(option);
-            });
+    // Muat provinsi
+    async function loadProvinsi() {
+      try {
+        const res = await fetchAPI('/provinsi/get/');
+        if (res.result && Array.isArray(res.result)) {
+          res.result.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.text = p.text;
+            selProv.add(opt);
+          });
         }
+      } catch (err) {
+        console.error('loadProvinsi error', err);
+        divHasil.innerText = 'Gagal memuat provinsi.';
+      }
+    }
 
-        function loadDistricts() {
-            const provinceSelect = document.getElementById('province');
-            const districtSelect = document.getElementById('district');
-            const subdistrictSelect = document.getElementById('subdistrict');
-            const searchBtn = document.getElementById('searchBtn');
+    selProv.addEventListener('change', async () => {
+      const provId = selProv.value;
+      selKab.innerHTML = `<option value="">-- Pilih Kab/Kota --</option>`;
+      selKec.innerHTML = `<option value="">-- Pilih Kecamatan --</option>`;
+      divHasil.innerText = '';
+      divAlamat.innerText = '';
+      selKab.disabled = true;
+      selKec.disabled = true;
+      if (!provId) return;
 
-            districtSelect.innerHTML = '<option value="">Pilih Kabupaten/Kota</option>';
-            subdistrictSelect.innerHTML = '<option value="">Pilih Kecamatan</option>';
-            districtSelect.disabled = true;
-            subdistrictSelect.disabled = true;
-            searchBtn.disabled = true;
-
-            if (provinceSelect.value === '') return;
-
-            const filteredDistricts = postalData.filter(item => 
-                item.provinsi === provinceSelect.value
-            );
-            const uniqueDistricts = [...new Set(filteredDistricts.map(item => item.regency))];
-            uniqueDistricts.forEach(district => {
-                const option = document.createElement('option');
-                option.value = district;
-                option.textContent = district;
-                districtSelect.appendChild(option);
-            });
-            districtSelect.disabled = false;
+      try {
+        const res = await fetchAPI('/kabkota/get/', { d_provinsi_id: provId });
+        if (res.result && Array.isArray(res.result)) {
+          res.result.forEach(k => {
+            const o = document.createElement('option');
+            o.value = k.id;
+            o.text = k.text;
+            selKab.add(o);
+          });
+          selKab.disabled = false;
         }
+      } catch (err) {
+        console.error('loadKab error', err);
+        divHasil.innerText = 'Gagal memuat kabupaten/kota.';
+      }
+    });
 
-        function loadSubdistricts() {
-            const provinceSelect = document.getElementById('province');
-            const districtSelect = document.getElementById('district');
-            const subdistrictSelect = document.getElementById('subdistrict');
-            const searchBtn = document.getElementById('searchBtn');
+    selKab.addEventListener('change', async () => {
+      const kabId = selKab.value;
+      selKec.innerHTML = `<option value="">-- Pilih Kecamatan --</option>`;
+      divHasil.innerText = '';
+      divAlamat.innerText = '';
+      selKec.disabled = true;
+      if (!kabId) return;
 
-            subdistrictSelect.innerHTML = '<option value="">Pilih Kecamatan</option>';
-            subdistrictSelect.disabled = true;
-            searchBtn.disabled = true;
-
-            if (districtSelect.value === '') return;
-
-            const filteredSubdistricts = postalData.filter(item => 
-                item.provinsi === provinceSelect.value && 
-                item.regency === districtSelect.value
-            );
-            const uniqueSubdistricts = [...new Set(filteredSubdistricts.map(item => item.district))];
-            uniqueSubdistricts.forEach(subdistrict => {
-                const option = document.createElement('option');
-                option.value = subdistrict;
-                option.textContent = subdistrict;
-                subdistrictSelect.appendChild(option);
-            });
-            subdistrictSelect.disabled = false;
+      try {
+        const res = await fetchAPI('/kecamatan/get/', { d_kabkota_id: kabId });
+        if (res.result && Array.isArray(res.result)) {
+          res.result.forEach(kec => {
+            const o = document.createElement('option');
+            o.value = kec.id;
+            o.text = kec.text;
+            selKec.add(o);
+          });
+          selKec.disabled = false;
         }
+      } catch (err) {
+        console.error('loadKec error', err);
+        divHasil.innerText = 'Gagal memuat kecamatan.';
+      }
+    });
 
-        function enableSearchBtn() {
-            const subdistrictSelect = document.getElementById('subdistrict');
-            const searchBtn = document.getElementById('searchBtn');
-            searchBtn.disabled = (subdistrictSelect.value === '');
+    selKec.addEventListener('change', async () => {
+      const kabId = selKab.value;
+      const kecId = selKec.value;
+      divHasil.innerText = '';
+      divAlamat.innerText = '';
+
+      if (!kabId || !kecId) return;
+
+      // 1. Panggil endpoint kelurahan/get untuk daftar desa/kelurahan
+      let daftarDesa = [];
+      try {
+        const resKel = await fetchAPI('/kelurahan/get/', { d_kecamatan_id: kecId });
+        if (resKel.result && Array.isArray(resKel.result)) {
+          daftarDesa = resKel.result;  // objek { id, text }
         }
+      } catch (err) {
+        console.warn('Gagal memuat kelurahan:', err);
+      }
 
-        function showPostalCode() {
-            const provinceSelect = document.getElementById('province');
-            const districtSelect = document.getElementById('district');
-            const subdistrictSelect = document.getElementById('subdistrict');
-            const resultElement = document.getElementById('result');
+      // 2. Panggil endpoint kodepos/get untuk daftar kode pos
+      try {
+        const resKod = await fetchAPI('/kodepos/get/', { d_kabkota_id: kabId, d_kecamatan_id: kecId });
+        if (resKod.result && Array.isArray(resKod.result) && resKod.result.length > 0) {
+          // Ambil kode pos pertama sebagai representatif
+          const kode = resKod.result[0].text;
 
-            if (subdistrictSelect.value === '') {
-                resultElement.innerHTML = '';
-                return;
-            }
+          // Untuk alamat lengkap, kita susun nama desa jika tersedia
+          const namaDesa = daftarDesa.length > 0 ? daftarDesa[0].text : '[Desa tidak diketahui]';
+          const namaKec = selKec.options[selKec.selectedIndex].text;
+          const namaKab = selKab.options[selKab.selectedIndex].text;
+          const namaProv = selProv.options[selProv.selectedIndex].text;
 
-            const filteredResult = postalData.find(item => 
-                item.provinsi === provinceSelect.value &&
-                item.regency === districtSelect.value &&
-                item.district === subdistrictSelect.value
-            );
-
-            if (filteredResult) {
-                resultElement.innerHTML = `
-                    <h3>Hasil Pencarian</h3>
-                    <p><strong>Provinsi:</strong> ${filteredResult.provinsi}</p>
-                    <p><strong>Kabupaten/Kota:</strong> ${filteredResult.regency}</p>
-                    <p><strong>Kecamatan:</strong> ${filteredResult.district}</p>
-                    <p><strong>Kode Pos:</strong> ${filteredResult.code}</p>
-                `;
-            } else {
-                resultElement.innerHTML = 'Data tidak ditemukan';
-            }
+          divAlamat.innerText = `Alamat lengkap (perkiraan): ${namaDesa}, ${namaKec}, ${namaKab}, ${namaProv}`;
+          divHasil.innerHTML = `<strong>Kode Pos:</strong> ${kode}`;
+        } else {
+          divHasil.innerText = 'Kode pos tidak ditemukan.';
         }
+      } catch (err) {
+        console.error('loadKodepos error', err);
+        divHasil.innerText = 'Gagal memuat kode pos.';
+      }
+    });
 
-        // Event listeners
-        document.getElementById('province').addEventListener('change', loadDistricts);
-        document.getElementById('district').addEventListener('change', loadSubdistricts);
-        document.getElementById('subdistrict').addEventListener('change', enableSearchBtn);
-        document.getElementById('searchBtn').addEventListener('click', showPostalCode);
-
-        window.onload = loadData;
-    </script>
+    // Inisialisasi
+    loadProvinsi();
+  </script>
 </body>
 </html>
