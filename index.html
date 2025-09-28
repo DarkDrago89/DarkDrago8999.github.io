@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Cari Kode Pos dengan Wilayah.id & Kodepos API</title>
+  <style>
+    body { font-family: Arial; margin: 30px; }
+    .container { max-width: 500px; background: #fafafa; padding: 20px; border-radius: 8px; }
+    label { display: block; margin-top: 10px; }
+    select { width: 100%; padding: 8px; margin-top: 5px; }
+    button { margin-top: 15px; padding: 10px; width: 100%; background: #2196F3; color: white; border: none; border-radius: 4px; }
+    .result { margin-top: 20px; padding: 15px; background: #eef; border: 1px solid #99c; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Cari Kode Pos (API)</h2>
+
+  <label>Provinsi</label>
+  <select id="provinsi"><option value="">-- Pilih Provinsi --</option></select>
+
+  <label>Kabupaten/Kota</label>
+  <select id="kabupaten" disabled><option value="">-- Pilih Kabupaten/Kota --</option></select>
+
+  <label>Kecamatan</label>
+  <select id="kecamatan" disabled><option value="">-- Pilih Kecamatan --</option></select>
+
+  <label>Desa / Kelurahan</label>
+  <select id="desa" disabled><option value="">-- Pilih Desa --</option></select>
+
+  <button id="btnCari">Cari Kode Pos</button>
+
+  <div id="hasil" class="result"></div>
+</div>
+
+<script>
+  const provSel = document.getElementById("provinsi");
+  const kabSel = document.getElementById("kabupaten");
+  const kecSel = document.getElementById("kecamatan");
+  const desaSel = document.getElementById("desa");
+  const btnCari = document.getElementById("btnCari");
+  const hasilDiv = document.getElementById("hasil");
+
+  const API_WILAYAH = "https://wilayah.id/api";
+  const API_KODEPOS = "https://kodepos.vercel.app";
+
+  async function fetchJSON(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP status ${resp.status}`);
+    return await resp.json();
+  }
+
+  async function loadProvinsi() {
+    try {
+      const obj = await fetchJSON(`${API_WILAYAH}/provinces.json`);
+      obj.data.forEach(p => {
+        provSel.append(new Option(p.name, p.code));
+      });
+      provSel.disabled = false;
+    } catch (err) {
+      alert("Gagal memuat data provinsi.");
+      provSel.disabled = true;
+    }
+  }
+
+  provSel.addEventListener("change", async () => {
+    kabSel.innerHTML = `<option value="">-- Pilih Kabupaten/Kota --</option>`;
+    kabSel.disabled = true;
+    kecSel.innerHTML = `<option value="">-- Pilih Kecamatan --</option>`;
+    kecSel.disabled = true;
+    desaSel.innerHTML = `<option value="">-- Pilih Desa --</option>`;
+    desaSel.disabled = true;
+    if (!provSel.value) return;
+    try {
+      const obj = await fetchJSON(`${API_WILAYAH}/regencies/${provSel.value}.json`);
+      obj.data.forEach(kab => {
+        kabSel.append(new Option(kab.name, kab.code));
+      });
+      kabSel.disabled = false;
+    } catch (err) {
+      alert("Gagal memuat data kabupaten/kota.");
+      kabSel.disabled = true;
+    }
+  });
+
+  kabSel.addEventListener("change", async () => {
+    kecSel.innerHTML = `<option value="">-- Pilih Kecamatan --</option>`;
+    kecSel.disabled = true;
+    desaSel.innerHTML = `<option value="">-- Pilih Desa --</option>`;
+    desaSel.disabled = true;
+    if (!kabSel.value) return;
+    try {
+      const obj = await fetchJSON(`${API_WILAYAH}/districts/${kabSel.value}.json`);
+      obj.data.forEach(kec => {
+        kecSel.append(new Option(kec.name, kec.code));
+      });
+      kecSel.disabled = false;
+    } catch (err) {
+      alert("Gagal memuat data kecamatan.");
+      kecSel.disabled = true;
+    }
+  });
+
+  kecSel.addEventListener("change", async () => {
+    desaSel.innerHTML = `<option value="">-- Pilih Desa --</option>`;
+    desaSel.disabled = true;
+    if (!kecSel.value) return;
+    try {
+      const obj = await fetchJSON(`${API_WILAYAH}/villages/${kecSel.value}.json`);
+      obj.data.forEach(desa => {
+        desaSel.append(new Option(desa.name, desa.name));
+      });
+      desaSel.disabled = false;
+    } catch (err) {
+      alert("Gagal memuat data desa/kelurahan.");
+      desaSel.disabled = true;
+    }
+  });
+
+  btnCari.addEventListener("click", async () => {
+    const namaDesa = desaSel.value;
+    if (!namaDesa) {
+      alert("Silakan pilih desa / kelurahan!");
+      return;
+    }
+
+    try {
+      const resp = await fetchJSON(`${API_KODEPOS}/search/?q=${encodeURIComponent(namaDesa)}`);
+      if (resp.data && resp.data.length > 0) {
+        let html = `<strong>Hasil Pencarian:</strong><br>`;
+        resp.data.forEach(item => {
+          html += `Desa: ${item.village}, Kecamatan: ${item.district}, Kab/Kota: ${item.regency}, Provinsi: ${item.province}<br>`;
+          html += `<span style="color: green; font-weight: bold;">Kode Pos: ${item.code}</span><br><br>`;
+        });
+        hasilDiv.innerHTML = html;
+        hasilDiv.style.display = "block";
+      } else {
+        hasilDiv.innerHTML = "Tidak ada hasil kode pos untuk nama desa tersebut.";
+        hasilDiv.style.display = "block";
+      }
+    } catch (err) {
+      console.error("Error:", err);
+      alert("Gagal mengambil data kode pos.");
+    }
+  });
+
+  loadProvinsi();
+</script>
+
+</body>
+</html>
