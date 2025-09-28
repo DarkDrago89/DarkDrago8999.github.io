@@ -81,7 +81,7 @@
         // Load data from local JSON file
         async function loadData() {
             try {
-                const response = await fetch('./kodepos.json');
+                const response = await fetch('kodepos.json');
                 postalData = await response.json();
                 console.log('Isi postalData:', postalData); // Tambahkan ini
                 populateProvinces();
